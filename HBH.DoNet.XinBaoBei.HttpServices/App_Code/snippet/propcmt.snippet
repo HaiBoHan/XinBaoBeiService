@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<CodeSnippet Format="1.0.0" xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <Header>
+    <Title>(hbh)带 备注/提示 的属性代码段</Title>
+    <Author>北京海博瀚</Author>
+    <Shortcut>propcmt</Shortcut>
+    <Description>(hbh)带 备注/提示 的属性代码段</Description>
+    <SnippetTypes>
+      <SnippetType>SurroundsWith</SnippetType>
+      <SnippetType>Expansion</SnippetType>
+    </SnippetTypes>
+  </Header>
+  <Snippet>
+    <Declarations>
+      <Literal>
+        <ID>type</ID>
+        <ToolTip>属性类型</ToolTip>
+        <Default>string</Default>
+      </Literal>
+      <Literal>
+        <ID>property</ID>
+        <ToolTip>属性名</ToolTip>
+        <Default>MyProperty</Default>
+      </Literal>
+      <Literal>
+        <ID>note</ID>
+        <ToolTip>备注说明</ToolTip>
+        <Default>Note</Default>
+      </Literal>
+    </Declarations>
+    <Code Language="csharp">
+      <![CDATA[// $note$
+        /// <summary>
+        /// $note$
+        /// </summary>
+        public $type$ $property$ { get; set; }$end$]]>
+    </Code>
+  </Snippet>
+</CodeSnippet>

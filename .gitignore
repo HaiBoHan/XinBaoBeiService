@@ -18,6 +18,7 @@ build/
 bld/
 [Bb]in/
 [Oo]bj/
+!Bin/
 
 # Roslyn cache directories
 *.ide/
@@ -229,3 +230,21 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+
+# zip
+*.rar
+*.zip
+
+# WebSite
+HttpPost/
+
+# svn
+.svn/
+
+# Reference
+极光推送/
+短信验证码/
+JPush/
+SMS/
+
