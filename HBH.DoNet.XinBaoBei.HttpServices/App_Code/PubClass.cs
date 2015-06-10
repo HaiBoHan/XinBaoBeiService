@@ -331,7 +331,7 @@ public class PubClass
     {
         if (dt != null)
         {
-            dt.ToString("yyyy-MM-dd hh:mm:ss");
+            return dt.ToString("yyyy-MM-dd hh:mm:ss");
         }
         return string.Empty;
     }

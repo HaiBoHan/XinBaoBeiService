@@ -110,6 +110,18 @@ namespace Entities
             set { solution = value; }
         }
 
+        // 答案简介
+        private string solutionSummary;
+
+        /// <summary>
+        /// 答案简介
+        /// </summary>
+        public string SolutionSummary
+        {
+            get { return solutionSummary; }
+            set { solutionSummary = value; }
+        }
+
 
         public static Keywords_QuestionHistory GetFromRow(DataRow row)
         {
@@ -122,6 +134,7 @@ namespace Entities
             question.Age = UIHelper.GetString(row["Age"]);
             question.QuestionID = UIHelper.GetLong(row["QuestionID"]);
             question.Solution = UIHelper.GetString(row["Solution"]);
+            question.SolutionSummary = UIHelper.GetString(row["SolutionSummary"]);
 
             return question;
         }

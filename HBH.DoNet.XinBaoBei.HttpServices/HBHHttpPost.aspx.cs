@@ -28,13 +28,14 @@ public partial class HBHHttpPost : System.Web.UI.Page
     //private const string Const_UsersIn = "select *,birthday as age,-1 as branch_id,-1 as unit_id,'' as branch_name,'' as hintmessage,'' as selfsign from hbh_user where  id in ({0}) ;";
 
     //private const string Const_UserQuerySelect = "select case when birthday < '1950-01-01' then null else concat(convert(birthday,char),'') end as age,ID,Account,Name,Region,Passwd,Sex,concat(convert(birthday,char),'') as birthday,Pic,Address,Tel,Judge_user_account,SysVersion,SelfSign,BabyName,Province,City,County,-1 as branch_id,-1 as unit_id,'' as branch_name,'' as hintmessage from hbh_user";
+    // 把数据库的 datetime 类型都改为 VARCHAR(125) 了，那样就不报错了；在程序里转成日期;
     private const string Const_UserQuerySelect = "select *,birthday as age,-1 as branch_id,-1 as unit_id,'' as branch_name,'' as hintmessage,'' as selfsign from hbh_user";
     private const string Const_UserQueryAccount = Const_UserQuerySelect + " where (account='{0}' or tel='{0}');";
     private const string Const_UserQueryID = Const_UserQuerySelect + " where id = {0};";
     private const string Const_UsersIn = Const_UserQuerySelect + " where  id in ({0}) ;";
     private const string Const_UserQueryTel = Const_UserQuerySelect + " where tel = '{0}';";
 
-    private const int ps = 20;
+    private const int ps = 2000;
     private const int pn = 1;
 
     protected void Page_Load(object sender, EventArgs e)
@@ -322,6 +323,7 @@ public partial class HBHHttpPost : System.Web.UI.Page
                 }
                 break;
             // SMS:  short message service
+            // http://211.149.198.209:8012/HBHHttpPost.aspx?Method=GetSMS&PhoneNumber=18001298823
             case "GetSMS":
                 {
                     // 
@@ -332,15 +334,16 @@ public partial class HBHHttpPost : System.Web.UI.Page
                     result = GetResultJson(postResult);
                 }
                 break;
-            // http://localhost:8012/HBHHttpPost.aspx?Method=ModifyPassword&user={"Passwd":"22222","id":"12"}
+            // http://localhost:8012/HBHHttpPost.aspx?Method=ModifyPassword&user={"Passwd":"22222","id":"12"}&OldPassword=123456
             // http://localhost:8012/HBHHttpPost.aspx?Method=ModifyPassword&user={"Passwd":"33333","tel":"18001298823"}&IdentifyCode=35176
             // 修改密码
             case "ModifyPassword":
                 {
                     string user = UIHelper.GetParam(this, "user");
                     string strIdentifyCode = UIHelper.GetParam(this, "IdentifyCode");
+                    string strOldPwd = UIHelper.GetParam(this, "OldPassword");
 
-                    PostResult postResult = ModifyPassword(user, strIdentifyCode);
+                    PostResult postResult = ModifyPassword(user, strIdentifyCode, strOldPwd);
 
                     result = GetResultJson(postResult);
 
@@ -688,8 +691,43 @@ where
         PostHelper.PostResult result = new PostHelper.PostResult();
 
         //string sql = "select id,user_id,message_Content,date_format(messDate,'%Y-%c-%d %H:%i:%s') as messDate ,message_Title,isRead,poster_id,subhead from hbh_Message where aboutAgeEnd >= '{0}' and aboutAgeBegin <= '{0}' Order by isRead ,messDate desc ;";
-        string sql = "select id,user_id,message_Content,date_format(messDate,'%Y-%c-%d %H:%i:%s') as messDate ,message_Title,isRead,poster_id,subhead from hbh_Message where aboutAgeBegin <= '{0}' Order by isRead ,messDate desc ,aboutAgeBegin desc limit 0 , 6 ;";
-        sql = string.Format(sql, ageGroup);
+        //string sql = "select id,user_id,message_Content,date_format(messDate,'%Y-%c-%d %H:%i:%s') as messDate ,message_Title,isRead,poster_id,subhead from hbh_Message where aboutAgeBegin <= '{0}' Order by isRead ,messDate desc ,aboutAgeBegin desc limit 0 , 6 ;";
+        //sql = string.Format(sql, ageGroup);
+
+        // 增加日期判断逻辑(注册当天只给欢迎消息) ，2015-06-08 wf 
+        string sql = @"
+select msg.id,msg.user_id,msg.message_Content
+	,date_format(msg.messDate,'%Y-%c-%d %H:%i:%s') as messDate 
+    ,msg.message_Title,msg.isRead,msg.poster_id
+    ,msg.subhead 
+    ,msg.aboutAgeBegin
+    ,usr.birthday
+    ,usr.CreatedOn
+    ,date_format(date_add(date_add(date_add(date_add(usr.Birthday,interval ifnull(msg.aboutAgeBegin_age,0) Year),interval ifnull(msg.aboutAgeBegin_month,0) Month),interval ifnull(msg.aboutAgeBegin_week - 1,0) Week),interval ifnull(msg.aboutAgeBegin_day,0) Day),'%Y-%c-%d %H:%i:%s') as AboutBegin
+    ,date_format(date_add(date_add(date_add(date_add(usr.Birthday,interval ifnull(msg.aboutAgeEnd_age,0) Year),interval ifnull(msg.aboutAgeEnd_month,0) Month),interval ifnull(msg.aboutAgeEnd_week - 1,0) Week),interval ifnull(msg.aboutAgeEnd_day,0) Day),'%Y-%c-%d %H:%i:%s') as AboutEnd
+    ,msg.*
+from hbh_Message msg
+	inner join hbh_user usr
+    on  1=1
+		and ((aboutAgeEnd = '0岁0个月0周第0天')
+			or (now() >= 
+					-- date_add(date_add(date_add(date_add(usr.Birthday,interval ifnull(msg.aboutAgeEnd_age,0) Year),interval ifnull(msg.aboutAgeEnd_month,0) Month),interval ifnull(msg.aboutAgeEnd_week - 1,0) Week),interval ifnull(msg.aboutAgeEnd_day,0) Day)
+                    date_add(date_add(date_add(date_add(usr.Birthday,interval ifnull(msg.aboutAgeBegin_age,0) Year),interval ifnull(msg.aboutAgeBegin_month,0) Month),interval ifnull(msg.aboutAgeBegin_week - 1,0) Week),interval ifnull(msg.aboutAgeBegin_day,0) Day)
+				and usr.CreatedOn <=
+					date_add(date_add(date_add(date_add(usr.Birthday,interval ifnull(msg.aboutAgeBegin_age,0) Year),interval ifnull(msg.aboutAgeBegin_month,0) Month),interval ifnull(msg.aboutAgeBegin_week - 1,0) Week),interval ifnull(msg.aboutAgeBegin_day,0) Day)
+                and curdate() > usr.CreatedOn
+				)
+			)
+where 1=1	
+	and usr.ID = {0}
+	-- and aboutAgeEnd <= '{0}' 
+Order by msg.isRead
+    ,aboutAgeBegin_age desc,aboutAgeBegin_month desc,aboutAgeBegin_week desc,aboutAgeBegin_day desc
+    ,msg.aboutAgeBegin desc ,msg.messDate desc 
+
+-- limit 0 , 6 ;
+";
+        sql = string.Format(sql, userID );
 
         MySqlHelper mysqlHelper = new MySqlHelper(SetOfBookType.HBHBaby);
 
@@ -883,7 +921,7 @@ where
     {
         PostHelper.PostResult result = new PostHelper.PostResult();
 
-        string sql = "select aboutUs_Content from hbh_AboutUs ;";
+        string sql = "select Replace(Replace(Replace(Replace(Replace(aboutUs_Content,'，',','),'“','\"'),'”','\"'),'。','.'),'、','、') as aboutUs_Content from hbh_AboutUs ;";
         //string sql = "select aboutUs_Content from AboutUs ; show variables like 'char%';";
 
         MySqlHelper mysqlHelper = new MySqlHelper(SetOfBookType.HBHBaby);
@@ -1472,9 +1510,11 @@ commit;
                      */
                     // ,CreatedOn,CreatedBy,ModifiedBy,ModifiedOn
                     // ,'{10}','{11}','{12}','{13}'
-                    string insertSQL = string.Format("insert into HBH_User (address,region,account, name,sex,tel,pic,passwd,birthday,BabyName,SelfSign,SysVersion) values('{0}','{1}','{2}','{3}','{4}','{5}','{6}','{7}','{8}','{9}','{10}','{11}');  select @@IDENTITY ;SELECT LAST_INSERT_ID();"
-                    , saveUser.Address, saveUser.Region, saveUser.Account, saveUser.Name, saveUser.Sex, saveUser.Tel, saveUser.Pic, saveUser.Passwd, saveUser.Birthday, saveUser.BabyName, saveUser.SelfSign, 0
-                    // ,saveUser.CreatedOn,saveUser.CreatedBy,saveUser.ModifiedBy,saveUser.ModifiedOn
+                    string strNow = PubClass.GetStringFromDate(DateTime.Now);
+                    string insertSQL = string.Format("insert into HBH_User (address,region,account, name,sex,tel,pic,passwd,birthday,BabyName,SelfSign,SysVersion,CreatedOn,CreatedBy,ModifiedBy,ModifiedOn) values('{0}','{1}','{2}','{3}','{4}','{5}','{6}','{7}','{8}','{9}','{10}','{11}','{12}','{13}','{14}','{15}');  select @@IDENTITY ;SELECT LAST_INSERT_ID();"
+                    , saveUser.Address, saveUser.Region, saveUser.Account, saveUser.Name, saveUser.Sex, saveUser.Tel, saveUser.Pic, saveUser.Passwd, saveUser.Birthday, saveUser.BabyName, saveUser.SelfSign
+                    , 0, strNow, string.Empty, strNow, string.Empty
+                        // ,saveUser.CreatedOn,saveUser.CreatedBy,saveUser.ModifiedBy,saveUser.ModifiedOn
                     );
 
 
@@ -1595,23 +1635,24 @@ commit;
             {
                 sbSet.Append(string.Format("account='{0}',", saveUser.Account));
 
-                // 校验
-                if (PubClass.IsNull(saveUser.))
-                {
-                    result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
-                    return result;
-                }
+                // 已取消了账号
+                //// 校验
+                //if (PubClass.IsNull(saveUser.Account))
+                //{
+                //    result.IsSuccess = false;
+                //    result.Message = "账号不可为空 !";
+                //    return result;
+                //}
             }
             if (saveUser.Name != null)
             {
                 sbSet.Append(string.Format("name='{0}',", saveUser.Name));
 
                 // 校验
-                if (PubClass.IsNull(saveUser.))
+                if (PubClass.IsNull(saveUser.Name))
                 {
                     result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
+                    result.Message = "用户名不可为空 !";
                     return result;
                 }
             }
@@ -1620,10 +1661,10 @@ commit;
                 sbSet.Append(string.Format("sex='{0}',", saveUser.Sex));
 
                 // 校验
-                if (PubClass.IsNull(saveUser.))
+                if (PubClass.IsNull(saveUser.Sex))
                 {
                     result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
+                    result.Message = "性别不可为空 !";
                     return result;
                 }
             }
@@ -1632,34 +1673,26 @@ commit;
                 sbSet.Append(string.Format("tel='{0}',", saveUser.Tel));
 
                 // 校验
-                if (PubClass.IsNull(saveUser.))
+                if (PubClass.IsNull(saveUser.Tel))
                 {
                     result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
+                    result.Message = "电话不可为空 !";
                     return result;
                 }
             }
             if (saveUser.Pic != null)
             {
                 sbSet.Append(string.Format("pic='{0}',", saveUser.Pic));
-
-                // 校验
-                if (PubClass.IsNull(saveUser.))
-                {
-                    result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
-                    return result;
-                }
             }
             if (saveUser.Passwd != null)
             {
                 sbSet.Append(string.Format("passwd='{0}',", saveUser.Passwd));
 
                 // 校验
-                if (PubClass.IsNull(saveUser.))
+                if (PubClass.IsNull(saveUser.Passwd))
                 {
                     result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
+                    result.Message = "密码不可为空 !";
                     return result;
                 }
             }
@@ -1668,10 +1701,10 @@ commit;
                 sbSet.Append(string.Format("birthday='{0}',", saveUser.Birthday));
 
                 // 校验
-                if (PubClass.IsNull(saveUser.))
+                if (PubClass.IsNull(saveUser.Birthday))
                 {
                     result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
+                    result.Message = "生日不可为空 !";
                     return result;
                 }
             }
@@ -1680,10 +1713,10 @@ commit;
                 sbSet.Append(string.Format("BabyName='{0}',", saveUser.BabyName));
 
                 // 校验
-                if (PubClass.IsNull(saveUser.))
+                if (PubClass.IsNull(saveUser.BabyName))
                 {
                     result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
+                    result.Message = "宝宝名称不可为空 !";
                     return result;
                 }
             }
@@ -1696,10 +1729,10 @@ commit;
                 sbSet.Append(string.Format("Province='{0}',", saveUser.Province));
 
                 // 校验
-                if (PubClass.IsNull(saveUser.))
+                if (PubClass.IsNull(saveUser.Province))
                 {
                     result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
+                    result.Message = "省市不可为空 !";
                     return result;
                 }
             }
@@ -1708,24 +1741,17 @@ commit;
                 sbSet.Append(string.Format("City='{0}',", saveUser.City));
 
                 // 校验
-                if (PubClass.IsNull(saveUser.))
+                if (PubClass.IsNull(saveUser.City))
                 {
                     result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
+                    result.Message = "省市不可为空 !";
                     return result;
                 }
             }
             if (saveUser.County != null)
             {
                 sbSet.Append(string.Format("County='{0}',", saveUser.County));
-
-                // 校验
-                if (PubClass.IsNull(saveUser.))
-                {
-                    result.IsSuccess = false;
-                    result.Message = "地址不可为空 !";
-                    return result;
-                }
+                
             }
         }
 
@@ -1735,9 +1761,13 @@ commit;
             result.Message = "没有传入更新的字段";
             return result;
         }
-
-        string updateSQL = string.Format("update hbh_user set {0} SysVersion=SysVersion+1,ModifiedOn='{1}'  where id='{2}';"
-            , sbSet.ToString(),DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), saveUser.ID
+        
+        string strNow = PubClass.GetStringFromDate(DateTime.Now);
+        string updateSQL = string.Format("update hbh_user set {1} SysVersion=SysVersion+1,ModifiedBy='{2}',ModifiedOn='{3}'  where id='{0}';"
+            , saveUser.ID
+            , sbSet.ToString(),DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            , string.Empty
+            , strNow
             );
 
         mysqlHelper.ExecuteNonQuery(CommandType.Text, updateSQL, new MySql.Data.MySqlClient.MySqlParameter());
@@ -2145,20 +2175,27 @@ where
 	1=1
 	-- and 
          */
+        // 2015-06-05 wf  ； 客户提bug ，要显示录入的关键字，所以拼接出来；
+        // 2015-06-05 wf  ； 客户提bug ，显示答案，第一行显示关键字；
         string selSql = @"
 select 
 	messDate as CreatedTime
-    ,aboutAge as Age
+    ,answer.aboutAge as Age
     ,answer.sub_qes_t as QuestionID
-    ,keywords as KeyWords
-    ,solution.SText as Solution
+    ,concat(parentMenu.Code,':',answer.keywords) as KeyWords
+    ,concat(parentMenu.Code,':',answer.keywords,' \r\n \r\n ',solution.SText) as Solution
     ,user.id as UserID
     ,user.Account as UserAccount
+    ,concat(SubString(Trim(Replace(Replace(Replace(Replace(solution.SText,'原因分析：',''),'原因分析:',''),char(10),''),char(13),'')),1,20),'...') as SolutionSummary
 from HBH_SubQuestion answer
 	inner join hbh_user user
     on answer.questioner = user.id
     left join t_solution solution
     on answer.sub_qes_t = solution.Question
+    left join t_question parentQuestion
+    on parentQuestion.ID = solution.Question
+    left join t_menu parentMenu
+    on parentMenu.ID = parentQuestion.ParentMenu
 where
 	1=1";
         string sql = string.Empty;
@@ -2331,8 +2368,10 @@ where
                         //, saveUser.Address, saveUser.Region, saveUser.Account, saveUser.Name, saveUser.Sex, saveUser.Tel, saveUser.Pic, saveUser.Passwd, saveUser.Birthday, 0
                         //    // ,saveUser.CreatedOn,saveUser.CreatedBy,saveUser.ModifiedBy,saveUser.ModifiedOn
                         //);
-                        string insertSQL = string.Format("insert into HBH_User ( account,tel,passwd,SysVersion) values('{0}','{1}','{2}','{3}');  select @@IDENTITY ;SELECT LAST_INSERT_ID();"
-                        ,register.Account, register.TelNo, register.Pwd, 0
+                        string strNow = PubClass.GetStringFromDate(DateTime.Now);
+                        string insertSQL = string.Format("insert into HBH_User ( account,tel,passwd,SysVersion,CreatedOn,CreatedBy,ModifiedBy,ModifiedOn) values('{0}','{1}','{2}','{3}','{4}','{5}','{6}','{7}');  select @@IDENTITY ;SELECT LAST_INSERT_ID();"
+                        , register.Account, register.TelNo, register.Pwd
+                        , 0, strNow, string.Empty, strNow, string.Empty
                         );
 
                         DataTable dt = new DataTable();
@@ -2464,7 +2503,7 @@ where
     /// </summary>
     /// <param name="user">user实体的Json字符串</param>
     /// <returns></returns>
-    private PostResult ModifyPassword(string userJson, string strIdentifyCode)
+    private PostResult ModifyPassword(string userJson, string strIdentifyCode, string strOldPwd)
     {
         PostHelper.PostResult result = new PostHelper.PostResult();
 
@@ -2553,27 +2592,40 @@ where
                         //}
                         //else
                         {
-                            foreach (Entities.User entity in list)
+                            //foreach (Entities.User entity in list)
+                            Entities.User entity = list[0];
                             {
                                 result.ResultJson = "";
 
                                 saveUser.ID = entity.ID;
 
-                                //ID大于0、版本小于0时，强制更新
-                                if (saveUser.SysVersion <= 0)
+                                // 旧密码非空，且旧密码不一致，报错；
+                                if (!PubClass.IsNull(strOldPwd)
+                                    && strOldPwd != entity.Passwd
+                                    )
                                 {
-                                    result = UpdatePassword(saveUser);
-                                }
-                                //判断版本大于0 并且 与数据库这个用户的版本比较，如果app端版本大
-                                else if (entity.SysVersion <= saveUser.SysVersion)
-                                {
-                                    result = UpdatePassword(saveUser);
-                                }
-                                else //否则不更新,返回重新查出最新的用户数据
-                                {
-
                                     result.IsSuccess = false;
-                                    result.Message = "已被他人修改,更新不成功!";
+                                    result.Message = "旧密码不正确!";
+                                    return result;
+                                }
+                                else
+                                {
+                                    //ID大于0、版本小于0时，强制更新
+                                    if (saveUser.SysVersion <= 0)
+                                    {
+                                        result = UpdatePassword(saveUser);
+                                    }
+                                    //判断版本大于0 并且 与数据库这个用户的版本比较，如果app端版本大
+                                    else if (entity.SysVersion <= saveUser.SysVersion)
+                                    {
+                                        result = UpdatePassword(saveUser);
+                                    }
+                                    else //否则不更新,返回重新查出最新的用户数据
+                                    {
+
+                                        result.IsSuccess = false;
+                                        result.Message = "已被他人修改,更新不成功!";
+                                    }
                                 }
                             }
                             if (string.IsNullOrEmpty(result.ResultJson))
@@ -2620,9 +2672,12 @@ where
         //string selectSQL = string.Format("select * from hbh_user where id = {0} ", saveUser.ID);
         string selectSQL = string.Format(Const_UserQueryID, saveUser.ID);
         // ,CreatedBy='{10}',CreatedOn='{11}',ModifiedBy='{12}',ModifiedOn='{13}'
-        string updateSQL = string.Format("update hbh_user set passwd='{0}',SysVersion=SysVersion+1 where id='{1}';",
-                saveUser.Passwd
-                , saveUser.ID
+        string strNow = PubClass.GetStringFromDate(DateTime.Now);
+        string updateSQL = string.Format("update hbh_user set passwd='{1}',SysVersion=SysVersion+1,ModifiedBy='{2}',ModifiedOn='{3}' where id='{0}';"
+            , saveUser.ID
+            , saveUser.Passwd
+            , string.Empty
+            , strNow
        );
         mysqlHelper.ExecuteNonQuery(CommandType.Text, updateSQL, new MySql.Data.MySqlClient.MySqlParameter());
         try
