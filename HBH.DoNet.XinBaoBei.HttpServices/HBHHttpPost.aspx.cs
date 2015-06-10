@@ -37,6 +37,7 @@ public partial class HBHHttpPost : System.Web.UI.Page
 
     // 暂时设置成2000,客户端先不分页吧
     private const int ps = 2000;
+    // 客户端先不分页吧
     private const int pn = 1;
 
     protected void Page_Load(object sender, EventArgs e)
