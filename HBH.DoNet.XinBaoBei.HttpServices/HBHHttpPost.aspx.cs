@@ -35,6 +35,7 @@ public partial class HBHHttpPost : System.Web.UI.Page
     private const string Const_UsersIn = Const_UserQuerySelect + " where  id in ({0}) ;";
     private const string Const_UserQueryTel = Const_UserQuerySelect + " where tel = '{0}';";
 
+    // 暂时设置成2000,客户端先不分页吧
     private const int ps = 2000;
     private const int pn = 1;
 
